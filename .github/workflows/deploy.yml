@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +26,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check Mapbox token is set
+        run: '[ -n "$NEXT_PUBLIC_MAPBOX_TOKEN" ] || echo "::warning::NEXT_PUBLIC_MAPBOX_TOKEN is empty — Map and mini-map will show a placeholder. Check the secret is a repository (or github-pages environment) secret named exactly NEXT_PUBLIC_MAPBOX_TOKEN."'
+        env:
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
       - run: npm run build
         env:
           NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
