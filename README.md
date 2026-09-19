@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gordon's Birds
 
-## Getting Started
+A museum-quality bird photography archive: a home gallery, a searchable catalogue, a zoomable D3 taxonomy explorer, a clustered Mapbox map, and an authenticated admin area for uploading and deleting photographs. Catalogue, map, taxonomy, home gallery, and photo detail are all generated live from one Photo/Species database — nothing is hand-wired page by page.
 
-First, run the development server:
+## Requirements
+
+- **Node.js 22.12+ / 24+** (this project was built and its native dependencies compiled against **Node 22**; see `.node-version`). Prisma 7's `better-sqlite3` driver adapter is a native addon, so if you switch Node major versions you must run `npm rebuild better-sqlite3` again.
+- A free [Mapbox](https://account.mapbox.com/access-tokens/) access token to enable the Map page, the Photo Detail mini-map, and the admin location picker. Without one, those three spots show a graceful "add your token" placeholder instead of crashing.
+
+## Setup
+
+```bash
+npm install
+cp .env.local.example .env.local
+```
+
+Fill in `.env.local`:
+
+- `DATABASE_URL` — leave as `file:./prisma/dev.db` for local dev.
+- `NEXT_PUBLIC_MAPBOX_TOKEN` — your Mapbox public token.
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD_HASH` — the single admin account. Generate the hash with:
+  ```bash
+  node scripts/hash-password.mjs "your-password"
+  ```
+  **Important:** bcrypt hashes are full of `$` characters, and Next.js expands `$VAR`-style references in `.env` files. Escape every `$` in the hash as `\$` when you paste it in, or login will silently fail. (The checked-in `.env.local` for this repo already does this, with a default password of `gordonbirds-admin` — change it before deploying anywhere real.)
+- `AUTH_SECRET` — a random signing secret:
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+
+Then set up the database and seed the initial 12-photo collection:
+
+```bash
+npx prisma migrate dev
+npm run db:seed
+```
+
+Run the dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `app/` — routes (Home, Catalogue, Taxonomy, Map, Shop, Photo Detail, Admin) and API routes.
+- `components/` — UI, grouped by area (`photo/`, `map/`, `taxonomy/`, `admin/upload/`, `nav/`).
+- `lib/` — data access (`photos.ts`, `taxonomy.ts`), image processing (`image.ts`), auth (`auth.ts`), and the static species reference dataset used for admin autocomplete (`taxonomyReference.ts`).
+- `prisma/` — schema, migrations, and `seed.ts` (which re-uses the same `lib/image.ts` pipeline a live admin upload uses).
+- `scripts/fetch-seed-images.mjs` — the tool used to source the 12 seed photographs from Wikimedia Commons (public-domain-leaning, license/credit recorded per photo in `prisma/seed-data/photos-source.json`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Data model
 
-## Learn More
+`Species` (scientific name, common name, genus, family, order) and `Photo` (image URLs, coordinates, location, optional photographer/license/source, `speciesId` foreign key) — see `prisma/schema.prisma`. Deleting a species' last photo prunes it from every view (it queries `species: { photos: { some: {} } }`) without deleting the `Species` row itself.
 
-To learn more about Next.js, take a look at the following resources:
+## Notable design decisions
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Local-first**: SQLite via Prisma's `better-sqlite3` driver adapter, images processed with `sharp` and stored under `public/photos/`, no cloud services required to run it. The schema avoids SQLite-only features so swapping the datasource to Postgres later is small.
+- **Auth**: a single admin account, hand-rolled (bcrypt + a signed `jose` JWT in an httpOnly cookie, checked in `proxy.ts`) rather than a full auth library — appropriate for one admin identity and avoids pulling in a library whose App Router support may lag a brand-new Next.js major version.
+- **Design**: a Windows 95 look — grey (`#C0C0C0`) backgrounds, black text, blue (`#0000FF`) accents/links, set in **W95FA** (a modern re-creation of the Windows 95 system font by MadeByArne, self-hosted via `next/font/local` from `assets/fonts/`; free for commercial use under the SIL Open Font License, see `assets/fonts/W95FA-OFL.txt`). Buttons and the gallery's column stepper use an authentic raised/pressed 3D bevel (`.bevel-btn` in `app/globals.css`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Known limitations (by design, for this prototype scope)
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- One species per upload batch; per-photo location assignment is supported, per-photo species is not.
+- Photo Detail's prev/next cycles a fixed global order, not the filtered/random set the visitor arrived from.
+- The infinite-gallery fetches all photo metadata (not full-resolution images) in one request and paginates client-side — fine at this collection's scale; a true cursor-based API would be the next step for a very large archive.
