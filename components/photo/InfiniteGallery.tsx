@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ColumnStepper } from "@/components/photo/ColumnStepper";
 import { PhotoCard } from "@/components/photo/PhotoCard";
-import type { PhotoCardData } from "@/lib/photos";
+import { usePhotos } from "@/lib/usePhotos";
 
 const PAGE_SIZE = 9;
 
@@ -32,23 +32,12 @@ function useMaxColumns() {
 }
 
 export function InfiniteGallery() {
-  const [photos, setPhotos] = useState<PhotoCardData[] | null>(null);
+  const { photos: loadedPhotos } = usePhotos();
+  const photos = useMemo(() => (loadedPhotos ? shuffle(loadedPhotos) : null), [loadedPhotos]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [columns, setColumns] = useState(3);
   const maxColumns = useMaxColumns();
   const sentinelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/photos")
-      .then((r) => r.json())
-      .then((data: { photos: PhotoCardData[] }) => {
-        if (!cancelled) setPhotos(shuffle(data.photos));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const el = sentinelRef.current;

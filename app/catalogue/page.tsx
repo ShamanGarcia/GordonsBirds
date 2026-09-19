@@ -1,21 +1,40 @@
-import { Suspense } from "react";
-import { getCatalogue, getLocationOptions } from "@/lib/photos";
+"use client";
+
+import { Suspense, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { searchPhotos } from "@/lib/photos";
+import { usePhotos } from "@/lib/usePhotos";
 import { CatalogueFilters } from "@/components/catalogue/CatalogueFilters";
 import { PhotoGrid } from "@/components/photo/PhotoGrid";
 
-export const dynamic = "force-dynamic";
+function CatalogueResults() {
+  const { photos, loading } = usePhotos();
+  const searchParams = useSearchParams();
+  const query = searchParams.get("q") ?? "";
 
-export default async function CataloguePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; country?: string; region?: string }>;
-}) {
-  const params = await searchParams;
-  const [photos, { countries, regions }] = await Promise.all([
-    getCatalogue({ query: params.q, country: params.country, region: params.region }),
-    getLocationOptions(),
-  ]);
+  const results = useMemo(
+    () => (photos ? searchPhotos(photos, query) : []),
+    [photos, query],
+  );
 
+  return (
+    <>
+      <Suspense fallback={null}>
+        <CatalogueFilters />
+      </Suspense>
+
+      <p className="mb-6 text-sm text-ink-muted">
+        {loading
+          ? "Loading…"
+          : `${results.length} photograph${results.length === 1 ? "" : "s"}`}
+      </p>
+
+      <PhotoGrid photos={results} />
+    </>
+  );
+}
+
+export default function CataloguePage() {
   return (
     <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-16">
       <h1 className="mb-2 font-serif text-3xl">Catalogue</h1>
@@ -25,14 +44,8 @@ export default async function CataloguePage({
       </p>
 
       <Suspense fallback={null}>
-        <CatalogueFilters countries={countries} regions={regions} />
+        <CatalogueResults />
       </Suspense>
-
-      <p className="mb-6 text-sm text-ink-muted">
-        {photos.length} photograph{photos.length === 1 ? "" : "s"}
-      </p>
-
-      <PhotoGrid photos={photos} />
     </div>
   );
 }

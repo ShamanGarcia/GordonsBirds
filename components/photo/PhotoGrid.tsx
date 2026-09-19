@@ -1,7 +1,7 @@
 import { PhotoCard } from "@/components/photo/PhotoCard";
-import type { PhotoCardData } from "@/lib/photos";
+import type { Photo } from "@/lib/photos";
 
-export function PhotoGrid({ photos }: { photos: PhotoCardData[] }) {
+export function PhotoGrid({ photos }: { photos: Photo[] }) {
   if (photos.length === 0) {
     return (
       <p className="py-16 text-center text-sm text-ink-muted">

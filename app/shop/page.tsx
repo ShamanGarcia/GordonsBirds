@@ -1,21 +1,23 @@
-import Image from "next/image";
-import { getRandomPhotos } from "@/lib/photos";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useMemo } from "react";
+import { pickRandom } from "@/lib/photos";
+import { usePhotos } from "@/lib/usePhotos";
+import { basePath } from "@/lib/basePath";
 
-export default async function ShopPage() {
-  const [featured] = await getRandomPhotos(1);
+export default function ShopPage() {
+  const { photos } = usePhotos();
+  const featured = useMemo(() => (photos ? pickRandom(photos, 1)[0] : null), [photos]);
 
   return (
     <div className="relative isolate flex min-h-[70vh] items-center justify-center overflow-hidden">
       {featured && (
         <>
-          <Image
-            src={featured.optimizedUrl}
+          {/* eslint-disable-next-line @next/next/no-img-element -- static export ships one plain image per entry, no next/image optimization to gain */}
+          <img
+            src={`${basePath}/photos/${featured.image}`}
             alt=""
-            fill
-            priority
-            className="object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-bg/85" aria-hidden="true" />
         </>

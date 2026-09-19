@@ -1,136 +1,73 @@
-import { prisma } from "@/lib/prisma";
-import { caseInsensitiveContains } from "@/lib/search";
+import Papa from "papaparse";
+import { basePath } from "@/lib/basePath";
 
-const PHOTO_CARD_SELECT = {
-  id: true,
-  thumbnailUrl: true,
-  optimizedUrl: true,
-  blurDataUrl: true,
-  width: true,
-  height: true,
-  locationName: true,
-  species: {
-    select: { commonName: true, scientificName: true },
-  },
-} as const;
-
-export type PhotoCardData = {
+export type Photo = {
   id: string;
-  thumbnailUrl: string;
-  optimizedUrl: string;
-  blurDataUrl: string | null;
-  width: number;
-  height: number;
-  locationName: string;
-  species: { commonName: string; scientificName: string };
+  image: string;
+  location: string;
+  commonName: string;
+  scientificName: string;
 };
 
-export async function getRandomPhotos(count: number): Promise<PhotoCardData[]> {
-  const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT id FROM "Photo" ORDER BY RANDOM() LIMIT ${count}`,
+type PhotoRow = {
+  id: string;
+  image: string;
+  location: string;
+  species: string;
+};
+
+const SPECIES_PATTERN = /^(.*?)\s*\(([^)]+)\)\s*$/;
+
+function parseSpecies(species: string): { commonName: string; scientificName: string } {
+  const match = species.match(SPECIES_PATTERN);
+  if (!match) return { commonName: species, scientificName: "" };
+  return { commonName: match[1], scientificName: match[2] };
+}
+
+let cache: Promise<Photo[]> | null = null;
+
+export function loadPhotos(): Promise<Photo[]> {
+  if (!cache) {
+    cache = fetch(`${basePath}/data/photos.csv`)
+      .then((res) => res.text())
+      .then((csv) => {
+        const { data } = Papa.parse<PhotoRow>(csv, { header: true, skipEmptyLines: true });
+        return data.map((row) => ({
+          id: row.id,
+          image: row.image,
+          location: row.location,
+          ...parseSpecies(row.species),
+        }));
+      });
+  }
+  return cache;
+}
+
+export function pickRandom(photos: Photo[], count: number): Photo[] {
+  const arr = [...photos];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, count);
+}
+
+export function searchPhotos(photos: Photo[], query: string): Photo[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return photos;
+  return photos.filter(
+    (p) =>
+      p.commonName.toLowerCase().includes(q) ||
+      p.scientificName.toLowerCase().includes(q) ||
+      p.location.toLowerCase().includes(q),
   );
-  const ids = rows.map((r) => r.id);
-  if (ids.length === 0) return [];
-  const photos = await prisma.photo.findMany({
-    where: { id: { in: ids } },
-    select: PHOTO_CARD_SELECT,
-  });
-  const byId = new Map(photos.map((p) => [p.id, p]));
-  return ids.map((id) => byId.get(id)).filter((p): p is PhotoCardData => Boolean(p));
 }
 
-export async function getAllPhotosForGallery(): Promise<PhotoCardData[]> {
-  return prisma.photo.findMany({
-    select: PHOTO_CARD_SELECT,
-    orderBy: { dateUploaded: "desc" },
-  });
-}
-
-export async function getCatalogue(params: {
-  query?: string;
-  country?: string;
-  region?: string;
-}): Promise<PhotoCardData[]> {
-  const { query, country, region } = params;
-
-  const speciesFilter = query
-    ? {
-        OR: [
-          { commonName: caseInsensitiveContains(query) },
-          { scientificName: caseInsensitiveContains(query) },
-          { genus: caseInsensitiveContains(query) },
-        ],
-      }
-    : undefined;
-
-  return prisma.photo.findMany({
-    where: {
-      ...(speciesFilter ? { species: speciesFilter } : {}),
-      ...(country ? { country } : {}),
-      ...(region ? { region } : {}),
-    },
-    select: PHOTO_CARD_SELECT,
-    orderBy: { dateUploaded: "desc" },
-  });
-}
-
-export async function getLocationOptions() {
-  const rows = await prisma.photo.findMany({
-    select: { country: true, region: true },
-    distinct: ["country", "region"],
-  });
-  const countries = Array.from(new Set(rows.map((r) => r.country).filter(Boolean))) as string[];
-  const regions = Array.from(new Set(rows.map((r) => r.region).filter(Boolean))) as string[];
-  return { countries: countries.sort(), regions: regions.sort() };
-}
-
-export async function getPhotoDetail(id: string) {
-  return prisma.photo.findUnique({
-    where: { id },
-    include: { species: true },
-  });
-}
-
-export async function getAdjacentPhotoIds(id: string) {
-  const all = await prisma.photo.findMany({
-    select: { id: true },
-    orderBy: { dateUploaded: "desc" },
-  });
-  const index = all.findIndex((p) => p.id === id);
+export function getAdjacentPhotoIds(photos: Photo[], id: string): { prevId: string | null; nextId: string | null } {
+  const index = photos.findIndex((p) => p.id === id);
   if (index === -1) return { prevId: null, nextId: null };
-  const prevId = index > 0 ? all[index - 1].id : null;
-  const nextId = index < all.length - 1 ? all[index + 1].id : null;
-  return { prevId, nextId };
-}
-
-export async function getPhotosBySpecies(speciesId: string): Promise<PhotoCardData[]> {
-  return prisma.photo.findMany({
-    where: { speciesId },
-    select: PHOTO_CARD_SELECT,
-    orderBy: { dateUploaded: "desc" },
-  });
-}
-
-export async function getPhotosByTaxonRank(
-  rank: "order" | "family" | "genus",
-  value: string,
-): Promise<PhotoCardData[]> {
-  return prisma.photo.findMany({
-    where: { species: { [rank]: value } },
-    select: PHOTO_CARD_SELECT,
-    orderBy: { dateUploaded: "desc" },
-  });
-}
-
-export async function getMapPhotos() {
-  return prisma.photo.findMany({
-    select: {
-      id: true,
-      latitude: true,
-      longitude: true,
-      locationName: true,
-      thumbnailUrl: true,
-      species: { select: { commonName: true, scientificName: true } },
-    },
-  });
+  return {
+    prevId: index > 0 ? photos[index - 1].id : null,
+    nextId: index < photos.length - 1 ? photos[index + 1].id : null,
+  };
 }

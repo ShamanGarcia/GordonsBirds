@@ -4,9 +4,9 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { PhotoCard } from "@/components/photo/PhotoCard";
 import { InfiniteGallery } from "@/components/photo/InfiniteGallery";
-import type { PhotoCardData } from "@/lib/photos";
+import type { Photo } from "@/lib/photos";
 
-export function HomeExplore({ initialPhotos }: { initialPhotos: PhotoCardData[] }) {
+export function HomeExplore({ initialPhotos }: { initialPhotos: Photo[] }) {
   const [exploring, setExploring] = useState(false);
 
   return (
@@ -21,7 +21,7 @@ export function HomeExplore({ initialPhotos }: { initialPhotos: PhotoCardData[] 
           >
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
               {initialPhotos.map((photo, i) => (
-                <PhotoCard key={photo.id} photo={photo} priority={i < 3} />
+                <PhotoCard key={photo.id} photo={photo} priority={i < 3} square />
               ))}
             </div>
             <div className="mt-10 flex justify-center">

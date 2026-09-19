@@ -1,11 +1,11 @@
 # Gordon's Birds
 
-A museum-quality bird photography archive: a home gallery, a searchable catalogue, a zoomable D3 taxonomy explorer, a clustered Mapbox map, and an authenticated admin area for uploading and deleting photographs. Catalogue, map, taxonomy, home gallery, and photo detail are all generated live from one Photo/Species database — nothing is hand-wired page by page.
+A bird photography archive: a home gallery, a searchable catalogue, a clustered Mapbox map, and a photo detail view — all generated in the browser from one spreadsheet. There is no server, database, or admin login: this is a static site, and the spreadsheet **is** the content-management system.
 
 ## Requirements
 
-- **Node.js 22.12+ / 24+** (this project was built and its native dependencies compiled against **Node 22**; see `.node-version`). Prisma 7's `better-sqlite3` driver adapter is a native addon, so if you switch Node major versions you must run `npm rebuild better-sqlite3` again.
-- A free [Mapbox](https://account.mapbox.com/access-tokens/) access token to enable the Map page, the Photo Detail mini-map, and the admin location picker. Without one, those three spots show a graceful "add your token" placeholder instead of crashing.
+- **Node.js 22.12+** to build the site locally.
+- A free [Mapbox](https://account.mapbox.com/access-tokens/) access token to enable the Map page and the Photo Detail mini-map. Without one, those two spots show a graceful "add your token" placeholder instead of crashing. The Map page also uses this token to geocode each photo's location text into coordinates live in the browser (see "How it works" below).
 
 ## Setup
 
@@ -14,67 +14,62 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Fill in `.env.local`:
-
-- `DATABASE_URL` — leave as `file:./prisma/dev.db` for local dev.
-- `NEXT_PUBLIC_MAPBOX_TOKEN` — your Mapbox public token.
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD_HASH` — the single admin account. Generate the hash with:
-  ```bash
-  node scripts/hash-password.mjs "your-password"
-  ```
-  **Important:** bcrypt hashes are full of `$` characters, and Next.js expands `$VAR`-style references in `.env` files. Escape every `$` in the hash as `\$` when you paste it in, or login will silently fail. (The checked-in `.env.local` for this repo already does this, with a default password of `gordonbirds-admin` — change it before deploying anywhere real.)
-- `AUTH_SECRET` — a random signing secret:
-  ```bash
-  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  ```
-
-Then set up the database and seed the initial 12-photo collection:
-
-```bash
-npx prisma migrate dev
-npm run db:seed
-```
-
-Run the dev server:
+Fill in `.env.local` with your Mapbox token, then run the dev server:
 
 ```bash
 npm run dev
 ```
 
-## Deploying to Render
+The dev server (and the production build) serve the site under `/GordonsBirds` — matching the path GitHub Pages will use — so visit `http://localhost:3000/GordonsBirds/`.
 
-This app needs a live Node.js server (database, admin auth, image uploads), so it can't run on static hosts like GitHub Pages. [Render](https://render.com) works with no code changes beyond what's already in this repo, because a persistent disk keeps the SQLite file and uploaded photos intact across deploys.
+## Editing the collection
 
-1. Push this repo to GitHub (already done for `ShamanGarcia/GordonsBirds`).
-2. In the Render dashboard: **New +** → **Blueprint**, and point it at this repo. Render will read `render.yaml` and provision the web service plus a 1 GB persistent disk mounted at `/var/data`. Persistent disks require a paid plan (the blueprint requests `starter`) — Render's free plan doesn't support them, so a fresh disk-less deploy would lose all data (DB + photos) on every restart.
-3. In the service's **Environment** tab, set the four secrets `render.yaml` leaves blank:
-   - `NEXT_PUBLIC_MAPBOX_TOKEN`
-   - `ADMIN_EMAIL`
-   - `ADMIN_PASSWORD_HASH` (same `\$`-escaping caveat as above applies here too)
-   - `AUTH_SECRET`
-4. Deploy. `scripts/render-start.sh` runs on every start: it symlinks `public/photos` to the persistent disk, runs `prisma migrate deploy`, seeds the initial 12 photos once (tracked by a marker file on the disk so it never reseeds), then starts the server.
-5. Subsequent admin uploads/deletes persist normally since they write to the same disk-backed path.
+The entire collection lives in [`public/data/photos.csv`](public/data/photos.csv), with one row per photograph:
+
+| column | meaning |
+| --- | --- |
+| `id` | Unique ID; also sets display order and Photo Detail's prev/next sequence. |
+| `image` | Filename of the photo, which must exist in `public/photos/`. |
+| `location` | Free-text place name (e.g. `"Hill Country, Texas, USA"`). Geocoded live via Mapbox on the Map page and Photo Detail — no coordinates need to be stored. |
+| `species` | `"Common Name (Scientific name)"` — parsed into both parts for display. |
+
+**To add a photograph**: drop the image file into `public/photos/`, add a row to `photos.csv`, and commit. **To remove one**: delete its row and image file, and commit. There's no login or upload form — git push access to this repo is the only "admin" permission there is.
+
+## How it works
+
+- The CSV is fetched and parsed (with [`papaparse`](https://www.papaparse.com/)) directly in the browser when a page loads — see `lib/photos.ts` and the `usePhotos()` hook in `lib/usePhotos.ts`. Home, Catalogue, Map, and Photo Detail are all client components built on top of that.
+- The Map page and Photo Detail's mini-map resolve each `location` string into coordinates via Mapbox's Geocoding API, called directly from the browser (`lib/geocode.ts`). Results are cached in memory and `sessionStorage`, so each unique location is only geocoded once per browser session — not once per photograph.
+- Because there's no server, `next.config.ts` sets `output: "export"`, producing plain static HTML/CSS/JS in `out/`. Photo Detail's dynamic `/photo/[id]` route uses `generateStaticParams` (reading the CSV at *build* time, via Node's filesystem, just to know which IDs exist) — the actual page content is still populated by the same client-side CSV fetch as everywhere else.
+
+## Deploying to GitHub Pages
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds and deploys automatically on every push to `main`. Two one-time manual steps are required (repo/account settings, so they have to be done in GitHub's own UI):
+
+1. **Settings → Pages** → set the source to **GitHub Actions**.
+2. **Settings → Secrets and variables → Actions** → add a repository secret named `NEXT_PUBLIC_MAPBOX_TOKEN` with your Mapbox token. (`NEXT_PUBLIC_` variables are baked into the build at compile time, so the workflow needs it as a secret to pass through to `npm run build`.)
+
+Once those are set, any push to `main` — including just editing `photos.csv` — triggers a rebuild and redeploy, live at `https://<your-username>.github.io/GordonsBirds/`.
+
+`next.config.ts` sets `basePath: "/GordonsBirds"` since GitHub Pages serves a project site like this one under `/<repo-name>/` by default. If you later attach a custom domain, remove that `basePath` and add a `CNAME` file to `public/`.
 
 ## Project structure
 
-- `app/` — routes (Home, Catalogue, Taxonomy, Map, Shop, Photo Detail, Admin) and API routes.
-- `components/` — UI, grouped by area (`photo/`, `map/`, `taxonomy/`, `admin/upload/`, `nav/`).
-- `lib/` — data access (`photos.ts`, `taxonomy.ts`), image processing (`image.ts`), auth (`auth.ts`), and the static species reference dataset used for admin autocomplete (`taxonomyReference.ts`).
-- `prisma/` — schema, migrations, and `seed.ts` (which re-uses the same `lib/image.ts` pipeline a live admin upload uses).
-- `scripts/fetch-seed-images.mjs` — the tool used to source the 12 seed photographs from Wikimedia Commons (public-domain-leaning, license/credit recorded per photo in `prisma/seed-data/photos-source.json`).
+- `app/` — routes (Home, Catalogue, Map, Shop, Photo Detail). No API routes — everything is static.
+- `components/` — UI, grouped by area (`photo/`, `map/`, `catalogue/`, `nav/`).
+- `lib/photos.ts` — loads and parses the CSV; `lib/usePhotos.ts` — the shared client hook; `lib/geocode.ts` — Mapbox geocoding with caching; `lib/basePath.ts` — the shared `/GordonsBirds` prefix used by raw `<img>`/`fetch()` calls (see note below).
+- `public/data/photos.csv` — the collection. `public/photos/` — the image files it references.
 
-## Data model
-
-`Species` (scientific name, common name, genus, family, order) and `Photo` (image URLs, coordinates, location, optional photographer/license/source, `speciesId` foreign key) — see `prisma/schema.prisma`. Deleting a species' last photo prunes it from every view (it queries `species: { photos: { some: {} } }`) without deleting the `Species` row itself.
+**A basePath gotcha worth knowing**: `next/link` and `next/image` apply `basePath` automatically, but plain `<img src="...">` tags and `fetch()` calls to `public/` assets do not — Next.js doesn't rewrite raw string paths. That's why `lib/photos.ts`'s CSV fetch and the plain `<img>` tags in `PhotoCard`/`PhotoDetailClient`/the Shop page all explicitly prepend `basePath` from `lib/basePath.ts`.
 
 ## Notable design decisions
 
-- **Local-first**: SQLite via Prisma's `better-sqlite3` driver adapter, images processed with `sharp` and stored under `public/photos/`, no cloud services required to run it. The schema avoids SQLite-only features so swapping the datasource to Postgres later is small.
-- **Auth**: a single admin account, hand-rolled (bcrypt + a signed `jose` JWT in an httpOnly cookie, checked in `proxy.ts`) rather than a full auth library — appropriate for one admin identity and avoids pulling in a library whose App Router support may lag a brand-new Next.js major version.
+- **Static, spreadsheet-driven**: no database, no server, no build-time secrets beyond the Mapbox token. The tradeoff is a much simpler "admin" story (edit a CSV + commit) in exchange for genuinely running on GitHub Pages alone.
+- **Live client-side geocoding**: rather than storing latitude/longitude in the sheet, the Map page and Photo Detail resolve `location` text to coordinates on the fly via Mapbox, adapted from the same forward-geocoding pattern this project used for its now-removed admin location picker.
+- **One plain image per photo**: no thumbnail/optimized/blur-placeholder variants (that required a server-side `sharp` pipeline, which doesn't exist anymore).
 - **Design**: a Windows 95 look — grey (`#C0C0C0`) backgrounds, black text, blue (`#0000FF`) accents/links, set in **W95FA** (a modern re-creation of the Windows 95 system font by MadeByArne, self-hosted via `next/font/local` from `assets/fonts/`; free for commercial use under the SIL Open Font License, see `assets/fonts/W95FA-OFL.txt`). Buttons and the gallery's column stepper use an authentic raised/pressed 3D bevel (`.bevel-btn` in `app/globals.css`).
 
-## Known limitations (by design, for this prototype scope)
+## Known limitations (by design, for this scope)
 
-- One species per upload batch; per-photo location assignment is supported, per-photo species is not.
-- Photo Detail's prev/next cycles a fixed global order, not the filtered/random set the visitor arrived from.
-- The infinite-gallery fetches all photo metadata (not full-resolution images) in one request and paginates client-side — fine at this collection's scale; a true cursor-based API would be the next step for a very large archive.
+- Catalogue search is a single free-text field matching common name, scientific name, or location — there's no structured country/region filter, since the sheet doesn't carry those as separate columns.
+- Photo Detail's prev/next cycles the CSV's row order (by `id`), not the filtered/random set the visitor arrived from.
+- Adding or removing a photo requires a commit + a redeploy (roughly a minute via GitHub Actions) — there's no instant, live editing.

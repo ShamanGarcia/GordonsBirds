@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "export",
+  basePath: "/GordonsBirds",
   images: {
-    qualities: [75, 90],
+    unoptimized: true,
   },
 };
 

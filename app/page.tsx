@@ -1,10 +1,13 @@
-import { getRandomPhotos } from "@/lib/photos";
+"use client";
+
+import { useMemo } from "react";
+import { pickRandom } from "@/lib/photos";
+import { usePhotos } from "@/lib/usePhotos";
 import { HomeExplore } from "@/components/photo/HomeExplore";
 
-export const dynamic = "force-dynamic";
-
-export default async function HomePage() {
-  const photos = await getRandomPhotos(9);
+export default function HomePage() {
+  const { photos, loading } = usePhotos();
+  const intro = useMemo(() => (photos ? pickRandom(photos, 9) : []), [photos]);
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-16">
@@ -18,16 +21,12 @@ export default async function HomePage() {
         </p>
       </div>
 
-      {photos.length === 0 ? (
-        <p className="text-ink-muted">
-          The collection is empty right now. Sign in to{" "}
-          <a href="/admin" className="underline hover:text-accent">
-            Admin Controls
-          </a>{" "}
-          to add the first photograph.
-        </p>
+      {loading ? (
+        <p className="text-ink-muted">Loading the collection&hellip;</p>
+      ) : intro.length === 0 ? (
+        <p className="text-ink-muted">The collection is empty right now.</p>
       ) : (
-        <HomeExplore initialPhotos={photos} />
+        <HomeExplore initialPhotos={intro} />
       )}
     </div>
   );

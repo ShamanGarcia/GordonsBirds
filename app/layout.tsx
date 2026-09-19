@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Gordon's Birds",
   description:
-    "A photographic field archive of birds — browse the collection by catalogue, taxonomy, and geography.",
+    "A photographic field archive of birds — browse the collection by catalogue and geography.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

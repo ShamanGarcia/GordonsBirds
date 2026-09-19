@@ -1,12 +1,48 @@
-import { getMapPhotos } from "@/lib/photos";
+"use client";
+
+import { useEffect, useState } from "react";
+import { usePhotos } from "@/lib/usePhotos";
 import { getMapboxToken } from "@/lib/mapbox";
+import { resolveLocations } from "@/lib/geocode";
 import { MapPlaceholder } from "@/components/map/MapPlaceholder";
-import { PhotoMap } from "@/components/map/PhotoMap";
+import { PhotoMap, type MapPhoto } from "@/components/map/PhotoMap";
 
-export const dynamic = "force-dynamic";
+export default function MapPage() {
+  const { photos } = usePhotos();
+  const [mapPhotos, setMapPhotos] = useState<MapPhoto[] | null>(null);
+  const token = getMapboxToken();
 
-export default async function MapPage() {
-  const [photos, token] = await Promise.all([getMapPhotos(), Promise.resolve(getMapboxToken())]);
+  useEffect(() => {
+    if (!photos || !token) return;
+    let cancelled = false;
+
+    resolveLocations(
+      photos.map((p) => p.location),
+      token,
+    ).then((coordinates) => {
+      if (cancelled) return;
+      setMapPhotos(
+        photos.flatMap((photo) => {
+          const coords = coordinates.get(photo.location);
+          if (!coords) return [];
+          return [
+            {
+              id: photo.id,
+              latitude: coords.lat,
+              longitude: coords.lng,
+              locationName: photo.location,
+              thumbnailUrl: `/photos/${photo.image}`,
+              species: { commonName: photo.commonName, scientificName: photo.scientificName },
+            },
+          ];
+        }),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, token]);
 
   return (
     <div className="mx-auto flex h-[calc(100vh-64px)] max-w-none flex-col px-0">
@@ -18,10 +54,14 @@ export default async function MapPage() {
         </p>
       </div>
       <div className="mt-6 flex-1">
-        {token ? <PhotoMap photos={photos} token={token} /> : (
+        {!token ? (
           <div className="mx-auto max-w-6xl px-5 sm:px-8">
             <MapPlaceholder />
           </div>
+        ) : !mapPhotos ? (
+          <p className="py-16 text-center text-sm text-ink-muted">Placing photographs&hellip;</p>
+        ) : (
+          <PhotoMap photos={mapPhotos} token={token} />
         )}
       </div>
     </div>

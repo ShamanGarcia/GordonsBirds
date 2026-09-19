@@ -41,13 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
-/prisma/dev.db
-/prisma/dev.db-journal
-
-# uploaded / generated photo assets (not the seed source images)
-/public/photos/
-
-# raw seed source photographs (large; fetched by scripts/fetch-seed-images.mjs)
-/prisma/seed-data/images/
+# static export output
+/out/
 
