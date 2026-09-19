@@ -66,7 +66,7 @@ Once those are set, any push to `main` — including just editing `photos.csv` �
 - **Static, spreadsheet-driven**: no database, no server, no build-time secrets beyond the Mapbox token. The tradeoff is a much simpler "admin" story (edit a CSV + commit) in exchange for genuinely running on GitHub Pages alone.
 - **Live client-side geocoding**: rather than storing latitude/longitude in the sheet, the Map page and Photo Detail resolve `location` text to coordinates on the fly via Mapbox, adapted from the same forward-geocoding pattern this project used for its now-removed admin location picker.
 - **One plain image per photo**: no thumbnail/optimized/blur-placeholder variants (that required a server-side `sharp` pipeline, which doesn't exist anymore).
-- **Design**: a Windows 95 look — grey (`#C0C0C0`) backgrounds, black text, blue (`#0000FF`) accents/links, set in **W95FA** (a modern re-creation of the Windows 95 system font by MadeByArne, self-hosted via `next/font/local` from `assets/fonts/`; free for commercial use under the SIL Open Font License, see `assets/fonts/W95FA-OFL.txt`). Buttons and the gallery's column stepper use an authentic raised/pressed 3D bevel (`.bevel-btn` in `app/globals.css`).
+- **Design**: a Windows 95 look — grey (`#C0C0C0`) backgrounds, black text, blue (`#0000FF`) accents/links — set in **EB Garamond** (an open-source, SIL-OFL-licensed revival of Claude Garamont's classic serif, loaded via `next/font/google`; see `lib/fonts.ts`). Buttons and the gallery's column stepper use an authentic raised/pressed 3D bevel (`.bevel-btn` in `app/globals.css`).
 
 ## Known limitations (by design, for this scope)
 

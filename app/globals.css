@@ -12,8 +12,8 @@
   --color-clay: #800000;
   --color-moss: #008000;
 
-  --font-serif: var(--font-w95fa);
-  --font-sans: var(--font-w95fa);
+  --font-serif: var(--font-garamond);
+  --font-sans: var(--font-garamond);
 }
 
 @theme inline {
@@ -42,9 +42,9 @@ html {
 body {
   background: var(--color-bg);
   color: var(--color-ink);
-  font-family: var(--font-sans), Tahoma, Arial, sans-serif;
-  -webkit-font-smoothing: none;
-  text-rendering: optimizeSpeed;
+  font-family: var(--font-sans), Garamond, Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
