@@ -6,8 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:render": "bash scripts/render-start.sh",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

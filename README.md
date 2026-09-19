@@ -41,6 +41,20 @@ Run the dev server:
 npm run dev
 ```
 
+## Deploying to Render
+
+This app needs a live Node.js server (database, admin auth, image uploads), so it can't run on static hosts like GitHub Pages. [Render](https://render.com) works with no code changes beyond what's already in this repo, because a persistent disk keeps the SQLite file and uploaded photos intact across deploys.
+
+1. Push this repo to GitHub (already done for `ShamanGarcia/GordonsBirds`).
+2. In the Render dashboard: **New +** → **Blueprint**, and point it at this repo. Render will read `render.yaml` and provision the web service plus a 1 GB persistent disk mounted at `/var/data`. Persistent disks require a paid plan (the blueprint requests `starter`) — Render's free plan doesn't support them, so a fresh disk-less deploy would lose all data (DB + photos) on every restart.
+3. In the service's **Environment** tab, set the four secrets `render.yaml` leaves blank:
+   - `NEXT_PUBLIC_MAPBOX_TOKEN`
+   - `ADMIN_EMAIL`
+   - `ADMIN_PASSWORD_HASH` (same `\$`-escaping caveat as above applies here too)
+   - `AUTH_SECRET`
+4. Deploy. `scripts/render-start.sh` runs on every start: it symlinks `public/photos` to the persistent disk, runs `prisma migrate deploy`, seeds the initial 12 photos once (tracked by a marker file on the disk so it never reseeds), then starts the server.
+5. Subsequent admin uploads/deletes persist normally since they write to the same disk-backed path.
+
 ## Project structure
 
 - `app/` — routes (Home, Catalogue, Taxonomy, Map, Shop, Photo Detail, Admin) and API routes.
